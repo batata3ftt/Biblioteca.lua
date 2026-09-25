@@ -1,12 +1,12 @@
 -- ============================================================
--- Babis UI Library v1.0.0
+-- Babis UI Library v1.0.1
 -- Reusable, hub-agnostic Roblox UI framework.
 -- Load with:  local Library = loadstring(game:HttpGet("URL"))()
 -- ============================================================
 
 local Library = {}
 Library.__index = Library
-Library.Version = "1.0.0"
+Library.Version = "1.0.1"
 
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
@@ -1548,7 +1548,6 @@ function Window.new(library, cfg)
     versionLabel.Parent = header
     self._versionLabel = versionLabel
 
-    -- INFO BUTTON
     local infoBtn = Instance.new("TextButton")
     infoBtn.Size = UDim2.new(0, 60, 0, 60)
     infoBtn.Position = UDim2.new(1, -182, 0, 12)
@@ -1566,7 +1565,6 @@ function Window.new(library, cfg)
     infoIcon.ScaleType = Enum.ScaleType.Fit
     infoIcon.Parent = infoBtn
 
-    -- MIN
     local minBtn = Instance.new("TextButton")
     minBtn.Size = UDim2.new(0, 60, 0, 60)
     minBtn.Position = UDim2.new(1, -122, 0, 12)
@@ -1583,7 +1581,6 @@ function Window.new(library, cfg)
     minGlyph.Parent = minBtn
     corner(minGlyph, 2)
 
-    -- CLOSE
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 60, 0, 60)
     closeBtn.Position = UDim2.new(1, -62, 0, 12)
@@ -1651,7 +1648,6 @@ function Window.new(library, cfg)
     contentContainer.Parent = mainWindow
     self._contentContainer = contentContainer
 
-    -- INFO FRAME
     local infoFrame = Instance.new("Frame")
     infoFrame.Size = UDim2.new(1, -theme.sizes.contentPadX*2, 1, -(theme.sizes.headerHeight + 20))
     infoFrame.Position = UDim2.new(0, theme.sizes.contentPadX, 0, theme.sizes.headerHeight + 10)
@@ -1855,13 +1851,16 @@ function Window.new(library, cfg)
         if not self._infoOpen then tween(infoIcon, { ImageColor3 = theme.colors.navIcon }, theme.anim.fast) end
     end)
 
-    local function clampToViewport(px, py)
+    -- ============================================================
+    -- CLAMP — agora aceita overrideH (tamanho alvo)
+    -- ============================================================
+    local function clampToViewport(px, py, overrideH)
         local cam = workspace.CurrentCamera
         if not cam then return px, py end
         local vp = cam.ViewportSize
         local s = uiScale.Scale or 1
         local w = scaleWrapper.Size.X.Offset * s
-        local h = scaleWrapper.Size.Y.Offset * s
+        local h = (overrideH or scaleWrapper.Size.Y.Offset) * s
         local halfW, halfH = w / 2, h / 2
         local minX, maxX = halfW, vp.X - halfW
         local minY, maxY = halfH, vp.Y - halfH
@@ -1870,6 +1869,19 @@ function Window.new(library, cfg)
         return px, py
     end
     self._clampToViewport = clampToViewport
+
+    -- guarda a posição de referência (onde o usuário quer que a janela fique)
+    self._lastPos = UDim2.new(0.5, 0, 0.5, 0)
+
+    local function readCurrentPixels()
+        local cam = workspace.CurrentCamera
+        local px, py = 0, 0
+        if cam then
+            px = scaleWrapper.Position.X.Scale * cam.ViewportSize.X + scaleWrapper.Position.X.Offset
+            py = scaleWrapper.Position.Y.Scale * cam.ViewportSize.Y + scaleWrapper.Position.Y.Offset
+        end
+        return px, py
+    end
 
     minBtn.Activated:Connect(function()
         if self.isMinimized then self:Restore() else self:Minimize() end
@@ -1912,6 +1924,7 @@ function Window.new(library, cfg)
             local baseY = self._startPos.Y.Scale * vp.Y + self._startPos.Y.Offset
             local px, py = clampToViewport(baseX + delta.X, baseY + delta.Y)
             scaleWrapper.Position = UDim2.new(0, px, 0, py)
+            self._lastPos = scaleWrapper.Position
         end
     end))
 
@@ -1930,11 +1943,10 @@ function Window.new(library, cfg)
         local s = math.min(1.25, math.min(sx, sy))
         s = math.max(s, 0.55)
         uiScale.Scale = s
-        local cur = scaleWrapper.Position
-        local px = cur.X.Scale * vp.X + cur.X.Offset
-        local py = cur.Y.Scale * vp.Y + cur.Y.Offset
+        local px, py = readCurrentPixels()
         local cx, cy = clampToViewport(px, py)
         scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
+        self._lastPos = scaleWrapper.Position
     end
     updateScale()
     if workspace.CurrentCamera then
@@ -2014,6 +2026,9 @@ function Window:Notify(title, message, duration)
     return self.library:Notify(title, message, duration)
 end
 
+-- ============================================================
+-- MINIMIZE / RESTORE — mantém posição, clampa pelo tamanho alvo
+-- ============================================================
 function Window:Minimize()
     if self.isMinimized then return end
     self.isMinimized = true
@@ -2031,7 +2046,13 @@ function Window:Minimize()
         px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
         py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
     end
-    local cx, cy = self._clampToViewport(px, py)
+
+    -- clampa com a altura MINIMIZADA pra não sair da tela
+    local cx, cy = self._clampToViewport(px, py, h)
+
+    -- salva essa posição de minimização
+    self._lastPos = UDim2.new(0, cx, 0, cy)
+
     tween(wrapper, {
         Size = UDim2.new(0, theme.sizes.windowWidth, 0, h),
         Position = UDim2.new(0, cx, 0, cy),
@@ -2042,18 +2063,34 @@ function Window:Restore()
     if not self.isMinimized then return end
     self.isMinimized = false
     local theme = self.library.Theme
+
     local wrapper = self._scaleWrapper
     local cam = workspace.CurrentCamera
     local px, py = 0, 0
-    if cam then
-        px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
-        py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
+
+    -- usa a posição salva (posição da minimização) se existir
+    if self._lastPos then
+        if cam then
+            px = self._lastPos.X.Scale * cam.ViewportSize.X + self._lastPos.X.Offset
+            py = self._lastPos.Y.Scale * cam.ViewportSize.Y + self._lastPos.Y.Offset
+        end
+    else
+        if cam then
+            px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
+            py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
+        end
     end
-    local cx, cy = self._clampToViewport(px, py)
+
+    -- clampa com a altura CHEIA (janela restaurada) pra não sair da tela
+    local cx, cy = self._clampToViewport(px, py, theme.sizes.windowHeight)
+
+    self._lastPos = UDim2.new(0, cx, 0, cy)
+
     tween(wrapper, {
         Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight),
         Position = UDim2.new(0, cx, 0, cy),
     }, theme.anim.slow)
+
     if self._infoOpen then
         self._infoFrame.Visible = true
         self._navBar.Visible = false
@@ -2089,8 +2126,9 @@ function Window:Open(playEntrance)
         px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
         py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
     end
-    local cx, cy = self._clampToViewport(px, py)
+    local cx, cy = self._clampToViewport(px, py, theme.sizes.windowHeight)
     wrapper.Position = UDim2.new(0, cx, 0, cy)
+    self._lastPos = wrapper.Position
 
     if playEntrance ~= false then
         wrapper.Size = UDim2.new(0, theme.sizes.windowWidth, 0, 0)
