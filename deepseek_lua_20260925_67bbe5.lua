@@ -1,12 +1,12 @@
 -- ============================================================
--- Babis UI Library v1.0.1
+-- Babis UI Library v1.2.0
 -- Reusable, hub-agnostic Roblox UI framework.
--- Load with:  local Library = loadstring(game:HttpGet("URL"))()
+-- Load:  local Library = loadstring(game:HttpGet("URL"))()
 -- ============================================================
 
 local Library = {}
 Library.__index = Library
-Library.Version = "1.0.1"
+Library.Version = "1.2.0"
 
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
@@ -15,6 +15,27 @@ local SoundService      = game:GetService("SoundService")
 local HttpService       = game:GetService("HttpService")
 local LocalPlayer       = Players.LocalPlayer
 local PlayerGui         = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ============================================================
+-- BRAND (editável de fora via Library.Brand / Library:SetBrand)
+-- ============================================================
+Library.Brand = {
+    Title        = "UI Library",
+    SubTitle     = "Free Edition",
+    Version      = "v1.0.0",
+    Discord      = "",
+    AboutTitle   = "About",
+    AboutBody    = "Built with Babis UI Library.",
+    AboutEnabled = true,
+}
+
+Library.Config = {
+    folder         = "BabisUI/configs",
+    ext            = ".json",
+    autoloadFile   = "BabisUI/autoload.txt",
+    introDuration  = 5.5,
+    notifySoundVol = 0.5,
+}
 
 -- ============================================================
 -- THEME
@@ -50,6 +71,9 @@ Library.Theme = {
 
         bellBg        = Color3.fromRGB(30, 38, 48),
         sectionTitle  = Color3.fromRGB(160, 210, 255),
+        cfgIcon       = Color3.fromRGB(170, 120, 255),
+        cfgBtnBg      = Color3.fromRGB(24, 24, 28),
+        cfgBtnBorder  = Color3.fromRGB(48, 48, 56),
     },
     sizes = {
         windowWidth   = 460,
@@ -79,11 +103,12 @@ Library.Theme = {
         handIconSize  = 82,
         handIconY     = 20,
         sectionHeaderH = 34,
+        cfgHeight     = 560,
     },
     fonts = {
-        appName  = Enum.Font.GothamBold,
-        version  = Enum.Font.Gotham,
-        intro    = Enum.Font.Code,
+        appName = Enum.Font.GothamBold,
+        version = Enum.Font.Gotham,
+        intro   = Enum.Font.Code,
     },
     textSizes = {
         appName   = 22,
@@ -96,6 +121,11 @@ Library.Theme = {
         discordTitle = 28,
         discordSub   = 18,
         sectionTitle = 18,
+        cfgTitle = 22,
+        cfgLabel = 17,
+        cfgBtn   = 17,
+        cfgHint  = 16,
+        cfgInput = 17,
     },
     anim = {
         fast   = 0.14,
@@ -113,17 +143,7 @@ Library.Assets = {
     bellIcon    = "rbxassetid://7072706001",
     notifySound = "rbxassetid://5153734608",
     introImage  = "rbxassetid://119251117614023",
-}
-
-Library.Config = {
-    introDuration  = 5.5,
-    introImgW      = 156,
-    introImgH      = 139,
-    notifySoundVol = 0.5,
-    discordInvite  = "",
-    aboutEnabled   = true,
-    aboutTitle     = "About",
-    aboutBody      = "Built with Babis UI Library.",
+    cfgIcon     = "rbxassetid://10709791036",
 }
 
 -- ============================================================
@@ -171,6 +191,94 @@ local function resolveIcon(icon)
     return ""
 end
 
+local function safeCall(fn, ...)
+    if type(fn) ~= "function" then return nil end
+    local ok, res = pcall(fn, ...)
+    if ok then return res end
+    return nil
+end
+
+-- ============================================================
+-- CONFIG FILE IO
+-- ============================================================
+function Library:_ensureCfgFolder()
+    if not safeCall(isfolder, "BabisUI") then safeCall(makefolder, "BabisUI") end
+    if not safeCall(isfolder, self.Config.folder) then safeCall(makefolder, self.Config.folder) end
+end
+
+function Library:SaveConfig(name, data)
+    self:_ensureCfgFolder()
+    if type(name) ~= "string" or name == "" then return false, "invalid name" end
+    local path = self.Config.folder .. "/" .. name .. self.Config.ext
+    local okEnc, resEnc = pcall(function() return HttpService:JSONEncode(data) end)
+    if not okEnc then return false, "encode failed" end
+    local ok = safeCall(writefile, path, resEnc)
+    if ok == nil then return false, "writefile failed" end
+    return true
+end
+
+function Library:LoadConfig(name)
+    self:_ensureCfgFolder()
+    local path = self.Config.folder .. "/" .. name .. self.Config.ext
+    local content = safeCall(readfile, path)
+    if type(content) ~= "string" then return nil end
+    local ok, data = pcall(function() return HttpService:JSONDecode(content) end)
+    if not ok then return nil end
+    return data
+end
+
+function Library:ListConfigs()
+    self:_ensureCfgFolder()
+    local out = {}
+    local files = safeCall(listfiles, self.Config.folder)
+    if type(files) ~= "table" then return out end
+    for _, path in ipairs(files) do
+        local name = path:match("([^/\\]+)$") or path
+        name = name:gsub(self.Config.ext:gsub("%.", "%%."), "")
+        table.insert(out, name)
+    end
+    return out
+end
+
+function Library:DeleteConfig(name)
+    local path = self.Config.folder .. "/" .. name .. self.Config.ext
+    return safeCall(delfile, path) ~= nil
+end
+
+function Library:GetAutoload()
+    local content = safeCall(readfile, self.Config.autoloadFile)
+    if type(content) == "string" and content ~= "" then return content end
+    return nil
+end
+
+function Library:SetAutoload(name)
+    self:_ensureCfgFolder()
+    if name == nil or name == "" then
+        safeCall(delfile, self.Config.autoloadFile)
+    else
+        safeCall(writefile, self.Config.autoloadFile, name)
+    end
+end
+
+-- ============================================================
+-- BRAND
+-- ============================================================
+function Library:SetBrand(t)
+    for k, v in pairs(t or {}) do
+        self.Brand[k] = v
+    end
+    for _, w in ipairs(self._windows or {}) do
+        if w.ApplyBrand then w:ApplyBrand() end
+    end
+end
+
+function Library:SetDiscord(url)
+    self.Brand.Discord = url or ""
+    for _, w in ipairs(self._windows or {}) do
+        if w.ApplyBrand then w:ApplyBrand() end
+    end
+end
+
 -- ============================================================
 -- INTRO
 -- ============================================================
@@ -182,8 +290,8 @@ function Library:PlayIntro(cfg, onComplete)
     cfg = cfg or {}
     local duration = cfg.Duration or self.Config.introDuration
     local img      = cfg.Image or self.Assets.introImage
-    local imgW     = cfg.ImageWidth or self.Config.introImgW
-    local imgH     = cfg.ImageHeight or self.Config.introImgH
+    local imgW     = cfg.ImageWidth or 156
+    local imgH     = cfg.ImageHeight or 139
     local text     = cfg.Text or "CONNECTING TO SERVER"
 
     local old = PlayerGui:FindFirstChild("BabisIntro")
@@ -321,20 +429,7 @@ function Library:PlayIntro(cfg, onComplete)
 end
 
 -- ============================================================
--- THEME
--- ============================================================
-function Library:SetTheme(overrides)
-    local function merge(dst, src)
-        for k, v in pairs(src) do
-            if type(v) == "table" and type(dst[k]) == "table" then merge(dst[k], v)
-            else dst[k] = v end
-        end
-    end
-    merge(self.Theme, overrides or {})
-end
-
--- ============================================================
--- NOTIFICATIONS
+-- NOTIFIER
 -- ============================================================
 local Notifier = {}
 Notifier.__index = Notifier
@@ -388,7 +483,6 @@ function Notifier:dismiss(row)
     if not row or not row.Parent then return end
     if row:GetAttribute("Dismissing") then return end
     row:SetAttribute("Dismissing", true)
-
     local card = row:FindFirstChild("Card")
     local startSize = row.Size
     if card then
@@ -547,21 +641,22 @@ local function makeCard(scroll, order, height, theme)
 end
 
 -- ============================================================
--- COMPONENTS
--- ============================================================
-
 -- BUTTON
+-- ============================================================
 local Button = {}
 Button.__index = Button
 
 function Button.new(section, cfg)
-    local theme = section.tab.window.library.Theme
+    local window = section.tab.window
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
     local titleText = cfg.Name or "Button"
     local descText  = cfg.Description or ""
     local onClick   = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
 
     local card, title, desc, cardStroke = makeCard(scroll, order, nil, theme)
     title.Text = titleText
@@ -575,7 +670,7 @@ function Button.new(section, cfg)
     hand.Size = UDim2.new(0, iconSize, 0, iconSize)
     hand.Position = UDim2.new(1, -(iconSize + right), 0, iconY)
     hand.BackgroundTransparency = 1
-    hand.Image = section.tab.window.library.Assets.handIcon
+    hand.Image = library.Assets.handIcon
     hand.ImageColor3 = theme.colors.handIdle
     hand.ScaleType = Enum.ScaleType.Fit
     hand.Parent = card
@@ -612,6 +707,7 @@ function Button.new(section, cfg)
         _card = card, _title = title, _desc = desc,
         _hand = hand, _playing = false,
     }, Button)
+    window:_registerComponent(self, cfg.Key or titleText)
 
     local function fire()
         if self._playing then return end
@@ -654,6 +750,8 @@ function Button.new(section, cfg)
         end)
 
         if onClick then onClick() end
+        if doNotify then library:Notify(titleText, "Executed") end
+
         task.delay(0.4, function() self._playing = false end)
     end
 
@@ -663,23 +761,29 @@ function Button.new(section, cfg)
     function self:Fire() fire() end
     function self:SetText(t) title.Text = t end
     function self:SetDescription(t) desc.Text = t end
+    function self:Get() return nil end
     function self:Destroy() card:Destroy() end
 
     return self
 end
 
+-- ============================================================
 -- TOGGLE
+-- ============================================================
 local Toggle = {}
 Toggle.__index = Toggle
 
 function Toggle.new(section, cfg)
-    local theme = section.tab.window.library.Theme
+    local window = section.tab.window
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
     local titleText = cfg.Name or "Toggle"
     local descText  = cfg.Description or ""
     local onChange  = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
     local state     = cfg.Default and true or false
 
     local card, title, desc, cardStroke = makeCard(scroll, order, nil, theme)
@@ -718,8 +822,9 @@ function Toggle.new(section, cfg)
 
     local offX, onX = pad, tW - knob - pad
     local self = setmetatable({ _state = state }, Toggle)
+    window:_registerComponent(self, cfg.Key or titleText)
 
-    local function render(animate, fire)
+    local function render(animate, fire, notify)
         local dur = animate and theme.anim.normal or 0
         if self._state then
             tween(track2, { BackgroundColor3 = theme.colors.toggleOn }, dur)
@@ -731,20 +836,26 @@ function Toggle.new(section, cfg)
             tween(knobFrame, { Position = UDim2.new(0, offX, 0.5, -knob/2) }, dur)
         end
         if fire and onChange then onChange(self._state) end
+        if notify and doNotify then
+            library:Notify(titleText, self._state and "Enabled" or "Disabled")
+        end
     end
 
-    render(false, false)
+    render(false, false, false)
 
     hit.Activated:Connect(function()
         self._state = not self._state
-        render(true, true)
+        render(true, true, true)
     end)
 
     function self:Set(v, fire)
         v = v and true or false
-        if v == self._state then return end
+        if v == self._state then
+            if fire and onChange then onChange(v) end
+            return
+        end
         self._state = v
-        render(true, fire ~= false)
+        render(true, fire ~= false, false)
     end
     function self:Get() return self._state end
     function self:Toggle() self:Set(not self._state) end
@@ -753,12 +864,16 @@ function Toggle.new(section, cfg)
     return self
 end
 
+-- ============================================================
 -- SLIDER
+-- ============================================================
 local Slider = {}
 Slider.__index = Slider
 
 function Slider.new(section, cfg)
-    local theme = section.tab.window.library.Theme
+    local window = section.tab.window
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
@@ -768,6 +883,7 @@ function Slider.new(section, cfg)
     local maxV      = cfg.Max or 100
     local value     = cfg.Default or minV
     local onChange  = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
 
     local card, title, desc, cardStroke = makeCard(scroll, order, 150, theme)
     title.Text = titleText
@@ -812,6 +928,7 @@ function Slider.new(section, cfg)
     valueLbl.Parent = card
 
     local self = setmetatable({ _value = value, _min = minV, _max = maxV }, Slider)
+    window:_registerComponent(self, cfg.Key or titleText)
     local dragging = false
 
     local function setRel(rel, fire)
@@ -862,6 +979,7 @@ function Slider.new(section, cfg)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
             if onChange then onChange(self._value) end
+            if doNotify then library:Notify(titleText, "Set to " .. tostring(self._value)) end
         end
     end)
 
@@ -885,13 +1003,16 @@ function Slider.new(section, cfg)
     return self
 end
 
+-- ============================================================
 -- DROPDOWN
+-- ============================================================
 local Dropdown = {}
 Dropdown.__index = Dropdown
 
 function Dropdown.new(section, cfg)
     local window = section.tab.window
-    local theme = window.library.Theme
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
@@ -900,6 +1021,7 @@ function Dropdown.new(section, cfg)
     local choices   = cfg.Options or {}
     local value     = cfg.Default or choices[1]
     local onChange  = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
 
     local card, title, desc, cardStroke = makeCard(scroll, order, nil, theme)
     title.Text = titleText
@@ -934,6 +1056,7 @@ function Dropdown.new(section, cfg)
     arrow.Parent = ddBtn
 
     local self = setmetatable({ _value = value, _options = choices }, Dropdown)
+    window:_registerComponent(self, cfg.Key or titleText)
     local ddListOpen, ddBackdrop, ddList = false, nil, nil
 
     local function closeDd()
@@ -1025,6 +1148,7 @@ function Dropdown.new(section, cfg)
                 ddBtn.Text = tostring(choice)
                 closeDd()
                 if onChange then onChange(choice) end
+                if doNotify then library:Notify(titleText, "Selected: " .. tostring(choice)) end
             end)
         end
 
@@ -1055,12 +1179,16 @@ function Dropdown.new(section, cfg)
     return self
 end
 
+-- ============================================================
 -- INPUT
+-- ============================================================
 local Input = {}
 Input.__index = Input
 
 function Input.new(section, cfg)
-    local theme = section.tab.window.library.Theme
+    local window = section.tab.window
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
@@ -1069,6 +1197,7 @@ function Input.new(section, cfg)
     local default   = cfg.Default or ""
     local numeric   = cfg.Numeric and true or false
     local onConfirm = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
 
     local card, title, desc, cardStroke = makeCard(scroll, order, nil, theme)
     title.Text = titleText
@@ -1096,6 +1225,7 @@ function Input.new(section, cfg)
     local boxStroke = stroke(box, theme.colors.cardBorder, 1.5, 0)
 
     local self = setmetatable({ _value = default, _numeric = numeric }, Input)
+    window:_registerComponent(self, cfg.Key or titleText)
 
     box:GetPropertyChangedSignal("Text"):Connect(function()
         if self._numeric then
@@ -1113,6 +1243,7 @@ function Input.new(section, cfg)
     box.FocusLost:Connect(function()
         tween(boxStroke, { Color = theme.colors.cardBorder }, theme.anim.fast)
         if onConfirm then onConfirm(self._value) end
+        if doNotify then library:Notify(titleText, "Value set to " .. tostring(self._value)) end
     end)
 
     function self:Set(v, fire)
@@ -1127,13 +1258,16 @@ function Input.new(section, cfg)
     return self
 end
 
+-- ============================================================
 -- KEYBIND
+-- ============================================================
 local Keybind = {}
 Keybind.__index = Keybind
 
 function Keybind.new(section, cfg)
     local window = section.tab.window
-    local theme = window.library.Theme
+    local library = window.library
+    local theme = library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
@@ -1141,6 +1275,7 @@ function Keybind.new(section, cfg)
     local descText  = cfg.Description or ""
     local default   = cfg.Default or "None"
     local onChange  = cfg.Callback
+    local doNotify  = cfg.Notify ~= false
     local mode      = cfg.Mode or "Toggle"
     local holdVal   = false
 
@@ -1165,7 +1300,8 @@ function Keybind.new(section, cfg)
     corner(keyBtn, 10)
     local keyStroke = stroke(keyBtn, theme.colors.cardBorder, 1.5, 0)
 
-    local self = setmetatable({ _key = default, _listening = false, _conn = nil, _value = false }, Keybind)
+    local self = setmetatable({ _key = default, _listening = false, _conn = nil }, Keybind)
+    window:_registerComponent(self, cfg.Key or titleText)
 
     keyBtn.Activated:Connect(function()
         if self._listening then return end
@@ -1184,6 +1320,7 @@ function Keybind.new(section, cfg)
             conn:Disconnect()
             self._conn = nil
             if onChange then onChange(self._key) end
+            if doNotify then library:Notify(titleText, "Set to " .. self._key) end
         end)
         self._conn = conn
     end)
@@ -1232,19 +1369,22 @@ function Keybind.new(section, cfg)
     return self
 end
 
+-- ============================================================
 -- PARAGRAPH
+-- ============================================================
 local Paragraph = {}
 Paragraph.__index = Paragraph
 
 function Paragraph.new(section, cfg)
-    local theme = section.tab.window.library.Theme
+    local window = section.tab.window
+    local theme = window.library.Theme
     local scroll = section.tab.scroll
     local order = section:_nextOrder()
 
     local titleText = cfg.Name or "Paragraph"
     local bodyText  = cfg.Content or cfg.Description or ""
 
-    local card, title, desc, cardStroke = makeCard(scroll, order, 128, theme)
+    local card, title, desc = makeCard(scroll, order, 128, theme)
     title.Text = titleText
     title.Size = UDim2.new(1, -32, 0, 28)
     title.Position = UDim2.new(0, 16, 0, 18)
@@ -1257,6 +1397,7 @@ function Paragraph.new(section, cfg)
     local self = setmetatable({}, Paragraph)
     function self:SetText(t) desc.Text = t end
     function self:SetTitle(t) title.Text = t end
+    function self:Get() return nil end
     function self:Destroy() card:Destroy() end
     return self
 end
@@ -1441,22 +1582,25 @@ function Window.new(library, cfg)
         _activeTab = nil,
         _tabOrder = 0,
         _connections = {},
+        _components = {},
         _destroyed = false,
         isOpen = false,
         isMinimized = false,
         _infoOpen = false,
         _dragging = false,
+        _justRestored = false,
+        _minimizedPos = nil,
         cfg = cfg,
     }, Window)
 
-    self.title    = cfg.Title or "UI Library"
-    self.subtitle = cfg.SubTitle or cfg.Subtitle or "v1.0.0"
-    self.version  = cfg.Version or library.Version
+    self.title    = cfg.Title or library.Brand.Title
+    self.subtitle = cfg.SubTitle or cfg.Subtitle or library.Brand.SubTitle
+    self.version  = cfg.Version or library.Brand.Version
     self.about    = cfg.About or {
-        Title = library.Config.aboutTitle,
-        Body  = library.Config.aboutBody,
-        Discord = library.Config.discordInvite,
-        Enabled = library.Config.aboutEnabled,
+        Title   = library.Brand.AboutTitle,
+        Body    = library.Brand.AboutBody,
+        Discord = library.Brand.Discord,
+        Enabled = library.Brand.AboutEnabled,
     }
 
     local screenGui = Instance.new("ScreenGui")
@@ -1564,6 +1708,7 @@ function Window.new(library, cfg)
     infoIcon.ImageColor3 = theme.colors.navIcon
     infoIcon.ScaleType = Enum.ScaleType.Fit
     infoIcon.Parent = infoBtn
+    self._infoIcon = infoIcon
 
     local minBtn = Instance.new("TextButton")
     minBtn.Size = UDim2.new(0, 60, 0, 60)
@@ -1774,7 +1919,7 @@ function Window.new(library, cfg)
         }) }, theme.anim.fast)
     end)
     discordBtn.Activated:Connect(function()
-        local invite = self.about.Discord or ""
+        local invite = self.about.Discord or library.Brand.Discord or ""
         if invite ~= "" then
             pcall(function() setclipboard(invite) end)
             library:Notify("Discord", "Invite copied: " .. invite)
@@ -1851,9 +1996,7 @@ function Window.new(library, cfg)
         if not self._infoOpen then tween(infoIcon, { ImageColor3 = theme.colors.navIcon }, theme.anim.fast) end
     end)
 
-    -- ============================================================
-    -- CLAMP — agora aceita overrideH (tamanho alvo)
-    -- ============================================================
+    -- clamp helper
     local function clampToViewport(px, py, overrideH)
         local cam = workspace.CurrentCamera
         if not cam then return px, py end
@@ -1869,19 +2012,6 @@ function Window.new(library, cfg)
         return px, py
     end
     self._clampToViewport = clampToViewport
-
-    -- guarda a posição de referência (onde o usuário quer que a janela fique)
-    self._lastPos = UDim2.new(0.5, 0, 0.5, 0)
-
-    local function readCurrentPixels()
-        local cam = workspace.CurrentCamera
-        local px, py = 0, 0
-        if cam then
-            px = scaleWrapper.Position.X.Scale * cam.ViewportSize.X + scaleWrapper.Position.X.Offset
-            py = scaleWrapper.Position.Y.Scale * cam.ViewportSize.Y + scaleWrapper.Position.Y.Offset
-        end
-        return px, py
-    end
 
     minBtn.Activated:Connect(function()
         if self.isMinimized then self:Restore() else self:Minimize() end
@@ -1905,6 +2035,7 @@ function Window.new(library, cfg)
         tween(xBar2, { BackgroundColor3 = theme.colors.textPrimary }, theme.anim.fast)
     end)
 
+    -- DRAG
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             self._dragging = true
@@ -1922,9 +2053,16 @@ function Window.new(library, cfg)
             local delta = input.Position - self._dragStart
             local baseX = self._startPos.X.Scale * vp.X + self._startPos.X.Offset
             local baseY = self._startPos.Y.Scale * vp.Y + self._startPos.Y.Offset
-            local px, py = clampToViewport(baseX + delta.X, baseY + delta.Y)
-            scaleWrapper.Position = UDim2.new(0, px, 0, py)
-            self._lastPos = scaleWrapper.Position
+            local s = uiScale.Scale or 1
+            local curH = self.isMinimized and (theme.sizes.headerHeight + 2) or theme.sizes.windowHeight
+            local newX = baseX + delta.X
+            local newY = baseY + delta.Y
+            local cx, cy = clampToViewport(newX, newY, curH)
+            scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
+            if self.isMinimized then
+                self._minimizedPos = scaleWrapper.Position
+            end
+            self._justRestored = false
         end
     end))
 
@@ -1943,10 +2081,13 @@ function Window.new(library, cfg)
         local s = math.min(1.25, math.min(sx, sy))
         s = math.max(s, 0.55)
         uiScale.Scale = s
-        local px, py = readCurrentPixels()
-        local cx, cy = clampToViewport(px, py)
+        local cur = scaleWrapper.Position
+        local px = cur.X.Scale * vp.X + cur.X.Offset
+        local py = cur.Y.Scale * vp.Y + cur.Y.Offset
+        local h = self.isMinimized and (theme.sizes.headerHeight + 2) or theme.sizes.windowHeight
+        local cx, cy = clampToViewport(px, py, h)
         scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
-        self._lastPos = scaleWrapper.Position
+        if self.isMinimized then self._minimizedPos = scaleWrapper.Position end
     end
     updateScale()
     if workspace.CurrentCamera then
@@ -1965,6 +2106,46 @@ function Window:_nextTabOrder()
     self._tabOrder = self._tabOrder + 1
     return self._tabOrder
 end
+
+function Window:_registerComponent(comp, key)
+    comp._configKey = key or ("comp_" .. tostring(#self._components + 1))
+    table.insert(self._components, comp)
+end
+
+function Window:CollectValues()
+    local data = {}
+    for _, comp in ipairs(self._components) do
+        if comp._configKey and comp.Get then
+            data[comp._configKey] = comp:Get()
+        end
+    end
+    return data
+end
+
+function Window:ApplyValues(data)
+    for _, comp in ipairs(self._components) do
+        if comp._configKey and data[comp._configKey] ~= nil and comp.Set then
+            local ok, err = pcall(function()
+                comp:Set(data[comp._configKey], false)
+            end)
+        end
+    end
+end
+
+function Window:ApplyBrand()
+    local b = self.library.Brand
+    if self._appLabel then self._appLabel.Text = self.cfg.Title or b.Title end
+    if self._subtitleLabel then self._subtitleLabel.Text = self.cfg.SubTitle or b.SubTitle end
+    if self._versionLabel then self._versionLabel.Text = self.cfg.Version or b.Version end
+    if self._aboutTitle then self._aboutTitle.Text = b.AboutTitle end
+    if self._aboutDesc then self._aboutDesc.Text = b.AboutBody end
+    self.about.Discord = self.cfg.About and self.cfg.About.Discord or b.Discord
+end
+
+function Window:SetTitle(t) self._appLabel.Text = t end
+function Window:SetSubtitle(t) self._subtitleLabel.Text = t end
+function Window:SetVersion(t) self._versionLabel.Text = t end
+function Window:SetDiscord(url) self.about.Discord = url end
 
 function Window:CreateTab(cfg)
     local tab = Tab.new(self, cfg or {})
@@ -2027,64 +2208,60 @@ function Window:Notify(title, message, duration)
 end
 
 -- ============================================================
--- MINIMIZE / RESTORE — mantém posição, clampa pelo tamanho alvo
+-- MINIMIZE / RESTORE
+-- Regra:
+--   Minimize  -> salva a posição atual (ou usa a última salva se acabou de restaurar)
+--   Restore   -> volta pro CENTRO da tela
+--   Minimize de novo -> volta pra última posição salva
 -- ============================================================
 function Window:Minimize()
     if self.isMinimized then return end
     self.isMinimized = true
+
     local theme = self.library.Theme
-    local h = theme.sizes.headerHeight + 2
+    local wrapper = self._scaleWrapper
+    local cam = workspace.CurrentCamera
+    local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+    local minH = theme.sizes.headerHeight + 2
+
+    local targetPos
+    if self._justRestored and self._minimizedPos then
+        targetPos = self._minimizedPos
+    else
+        local px = wrapper.Position.X.Scale * vp.X + wrapper.Position.X.Offset
+        local py = wrapper.Position.Y.Scale * vp.Y + wrapper.Position.Y.Offset
+        targetPos = UDim2.new(0, px, 0, py)
+    end
+    self._justRestored = false
+
+    local cx, cy = self._clampToViewport(targetPos.X.Offset, targetPos.Y.Offset, minH)
+    self._minimizedPos = UDim2.new(0, cx, 0, cy)
+
     self._navBar.Visible = false
     self._contentContainer.Visible = false
     for _, t in ipairs(self._tabs) do t.scroll.Visible = false end
     if self._infoOpen then self._infoFrame.Visible = false end
 
-    local wrapper = self._scaleWrapper
-    local cam = workspace.CurrentCamera
-    local px, py = 0, 0
-    if cam then
-        px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
-        py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
-    end
-
-    -- clampa com a altura MINIMIZADA pra não sair da tela
-    local cx, cy = self._clampToViewport(px, py, h)
-
-    -- salva essa posição de minimização
-    self._lastPos = UDim2.new(0, cx, 0, cy)
-
     tween(wrapper, {
-        Size = UDim2.new(0, theme.sizes.windowWidth, 0, h),
-        Position = UDim2.new(0, cx, 0, cy),
+        Size = UDim2.new(0, theme.sizes.windowWidth, 0, minH),
+        Position = self._minimizedPos,
     }, theme.anim.slow)
 end
 
 function Window:Restore()
     if not self.isMinimized then return end
     self.isMinimized = false
-    local theme = self.library.Theme
+    self._justRestored = true
 
+    local theme = self.library.Theme
     local wrapper = self._scaleWrapper
     local cam = workspace.CurrentCamera
-    local px, py = 0, 0
+    local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
 
-    -- usa a posição salva (posição da minimização) se existir
-    if self._lastPos then
-        if cam then
-            px = self._lastPos.X.Scale * cam.ViewportSize.X + self._lastPos.X.Offset
-            py = self._lastPos.Y.Scale * cam.ViewportSize.Y + self._lastPos.Y.Offset
-        end
-    else
-        if cam then
-            px = wrapper.Position.X.Scale * cam.ViewportSize.X + wrapper.Position.X.Offset
-            py = wrapper.Position.Y.Scale * cam.ViewportSize.Y + wrapper.Position.Y.Offset
-        end
-    end
-
-    -- clampa com a altura CHEIA (janela restaurada) pra não sair da tela
-    local cx, cy = self._clampToViewport(px, py, theme.sizes.windowHeight)
-
-    self._lastPos = UDim2.new(0, cx, 0, cy)
+    -- sempre volta pro centro
+    local cx = vp.X / 2
+    local cy = vp.Y / 2
+    cx, cy = self._clampToViewport(cx, cy, theme.sizes.windowHeight)
 
     tween(wrapper, {
         Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight),
@@ -2128,7 +2305,6 @@ function Window:Open(playEntrance)
     end
     local cx, cy = self._clampToViewport(px, py, theme.sizes.windowHeight)
     wrapper.Position = UDim2.new(0, cx, 0, cy)
-    self._lastPos = wrapper.Position
 
     if playEntrance ~= false then
         wrapper.Size = UDim2.new(0, theme.sizes.windowWidth, 0, 0)
@@ -2176,9 +2352,172 @@ function Window:Open(playEntrance)
     end
 end
 
-function Window:SetTitle(t) self._appLabel.Text = t end
-function Window:SetSubtitle(t) self._subtitleLabel.Text = t end
-function Window:SetVersion(t) self._versionLabel.Text = t end
+-- ============================================================
+-- SETTINGS PANEL (keybind + config save/load)
+-- ============================================================
+function Window:BuildSettingsPanel(section, opts)
+    opts = opts or {}
+    local library = self.library
+
+    -- Keybind
+    section:CreateKeybind({
+        Name        = opts.KeybindName or "Toggle UI Key",
+        Description = opts.KeybindDesc or "Key to open/close the interface",
+        Default     = opts.DefaultKeybind or "K",
+        Mode        = "Toggle",
+        Notify      = false,
+        Callback    = function(key)
+            if self.isOpen then self:Close() else self:Open() end
+        end,
+    })
+
+    -- Config name input
+    local nameInput = section:CreateInput({
+        Name        = "Config name",
+        Description = "Type a name and press Enter",
+        Default     = "",
+        Placeholder = "type a name...",
+        Notify      = false,
+        Callback    = function() end,
+    })
+
+    -- List dropdown
+    local listDd = section:CreateDropdown({
+        Name        = "Config list",
+        Description = "Pick a config",
+        Options     = { "---" },
+        Default     = "---",
+        Notify      = false,
+        Callback    = function(v) end,
+    })
+
+    local selectedName = nil
+
+    local function refreshList()
+        local list = library:ListConfigs()
+        if #list == 0 then list = { "---" } end
+        listDd:SetOptions(list)
+        listDd:Set(list[1], false)
+        selectedName = nil
+    end
+    refreshList()
+
+    section:CreateButton({
+        Name        = "Create config",
+        Description = "Save current values to a new file",
+        Notify      = false,
+        Callback    = function()
+            local name = nameInput:Get()
+            if name == "" then
+                library:Notify("Config", "Enter a name first")
+                return
+            end
+            local ok, err = library:SaveConfig(name, self:CollectValues())
+            if ok then
+                library:Notify("Config", "\"" .. name .. "\" created")
+                nameInput:Set("")
+                refreshList()
+            else
+                library:Notify("Config", "Failed: " .. tostring(err))
+            end
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Save (overwrite selected)",
+        Description = "Overwrite currently selected config",
+        Notify      = false,
+        Callback    = function()
+            local name = listDd:Get()
+            if not name or name == "---" then
+                library:Notify("Config", "Select a config first")
+                return
+            end
+            local ok = library:SaveConfig(name, self:CollectValues())
+            if ok then
+                library:Notify("Config", "\"" .. name .. "\" saved")
+            else
+                library:Notify("Config", "Failed")
+            end
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Load selected",
+        Description = "Apply selected config values",
+        Notify      = false,
+        Callback    = function()
+            local name = listDd:Get()
+            if not name or name == "---" then
+                library:Notify("Config", "Select a config first")
+                return
+            end
+            local data = library:LoadConfig(name)
+            if not data then
+                library:Notify("Config", "Failed to load")
+                return
+            end
+            self:ApplyValues(data)
+            library:Notify("Config", "\"" .. name .. "\" loaded")
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Delete selected",
+        Description = "Remove selected config file",
+        Notify      = false,
+        Callback    = function()
+            local name = listDd:Get()
+            if not name or name == "---" then
+                library:Notify("Config", "Select a config first")
+                return
+            end
+            library:DeleteConfig(name)
+            library:Notify("Config", "\"" .. name .. "\" deleted")
+            refreshList()
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Refresh list",
+        Description = "Reload config list from disk",
+        Notify      = false,
+        Callback    = function()
+            refreshList()
+            library:Notify("Config", "List refreshed")
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Set as autoload",
+        Description = "Load this config on next script run",
+        Notify      = false,
+        Callback    = function()
+            local name = listDd:Get()
+            if not name or name == "---" then
+                library:Notify("Config", "Select a config first")
+                return
+            end
+            library:SetAutoload(name)
+            library:Notify("Config", "\"" .. name .. "\" set as autoload")
+        end,
+    })
+
+    section:CreateButton({
+        Name        = "Reset autoload",
+        Description = "Clear autoload setting",
+        Notify      = false,
+        Callback    = function()
+            library:SetAutoload(nil)
+            library:Notify("Config", "Autoload cleared")
+        end,
+    })
+
+    return {
+        Refresh = refreshList,
+    }
+end
+
 function Window:Destroy()
     self._destroyed = true
     for _, c in ipairs(self._connections) do
@@ -2191,9 +2530,13 @@ end
 -- ============================================================
 -- LIBRARY
 -- ============================================================
+Library._windows = {}
+
 function Library:CreateWindow(cfg)
     self._notifier = self._notifier or Notifier.new(self.Theme, self.Assets, self.Config)
-    return Window.new(self, cfg or {})
+    local w = Window.new(self, cfg or {})
+    table.insert(self._windows, w)
+    return w
 end
 
 function Library:Notify(title, message, duration)
@@ -2203,8 +2546,14 @@ function Library:Notify(title, message, duration)
     return self._notifier:notify(title, message, duration)
 end
 
-function Library:SetDiscord(invite)
-    self.Config.discordInvite = invite
+function Library:SetTheme(overrides)
+    local function merge(dst, src)
+        for k, v in pairs(src) do
+            if type(v) == "table" and type(dst[k]) == "table" then merge(dst[k], v)
+            else dst[k] = v end
+        end
+    end
+    merge(self.Theme, overrides or {})
 end
 
 return Library
