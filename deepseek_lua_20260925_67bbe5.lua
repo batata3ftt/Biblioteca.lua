@@ -1,12 +1,12 @@
 -- ============================================================
--- Babis UI Library v1.3.1
+-- Babis UI Library v1.3.2
 -- Reusable, hub-agnostic Roblox UI framework.
 -- Load:  local Library = loadstring(game:HttpGet("URL"))()
 -- ============================================================
 
 local Library = {}
 Library.__index = Library
-Library.Version = "1.3.1"
+Library.Version = "1.3.2"
 
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
@@ -929,7 +929,7 @@ function Window.new(library, cfg)
         library=library, _tabs={}, _activeTab=nil, _tabOrder=0,
         _connections={}, _components={}, _destroyed=false,
         isOpen=false, isMinimized=false, _infoOpen=false, _dragging=false,
-        _minimizedPos=nil, _everOpened=false, cfg=cfg,
+        _savedPos=nil, _everOpened=false, cfg=cfg,
     }, Window)
     self.title = cfg.Title or library.Brand.Title
     self.subtitle = cfg.SubTitle or cfg.Subtitle or library.Brand.SubTitle
@@ -961,6 +961,7 @@ function Window.new(library, cfg)
     mainWindow.BackgroundTransparency = 1; mainWindow.Parent = scaleWrapper
     corner(mainWindow, theme.sizes.windowRadius); self._mainWindow = mainWindow
 
+    -- HEADER (always visible, even minimized)
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1,0,0,theme.sizes.headerHeight)
     header.BackgroundColor3 = theme.colors.headerTint; header.BackgroundTransparency = 1
@@ -1039,10 +1040,20 @@ function Window.new(library, cfg)
     })
     divGrad.Parent = divider
 
+    -- BODY LAYER (everything below the header) — hidden when minimized
+    local bodyLayer = Instance.new("Frame")
+    bodyLayer.Size = UDim2.new(1,0,1,0)
+    bodyLayer.BackgroundTransparency = 1
+    bodyLayer.BorderSizePixel = 0
+    bodyLayer.ClipsDescendants = false
+    bodyLayer.Visible = false
+    bodyLayer.Parent = mainWindow
+    self._bodyLayer = bodyLayer
+
     local navBar = Instance.new("Frame")
     navBar.Size = UDim2.new(1,-theme.sizes.navPadX*2,0,theme.sizes.navHeight)
     navBar.Position = UDim2.new(0,theme.sizes.navPadX,0,theme.sizes.headerHeight + 12)
-    navBar.BackgroundTransparency = 1; navBar.Parent = mainWindow; self._navBar = navBar
+    navBar.BackgroundTransparency = 1; navBar.Parent = bodyLayer; self._navBar = navBar
     local navLayout = Instance.new("UIListLayout")
     navLayout.FillDirection = Enum.FillDirection.Horizontal
     navLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1053,14 +1064,14 @@ function Window.new(library, cfg)
     local contentContainer = Instance.new("Frame")
     contentContainer.Size = UDim2.new(1,-theme.sizes.contentPadX*2,1,-(theme.sizes.headerHeight+theme.sizes.navHeight+30))
     contentContainer.Position = UDim2.new(0,theme.sizes.contentPadX,0,theme.sizes.headerHeight+theme.sizes.navHeight+20)
-    contentContainer.BackgroundTransparency = 1; contentContainer.Parent = mainWindow
+    contentContainer.BackgroundTransparency = 1; contentContainer.Parent = bodyLayer
     self._contentContainer = contentContainer
 
     local infoFrame = Instance.new("Frame")
     infoFrame.Size = UDim2.new(1,-theme.sizes.contentPadX*2,1,-(theme.sizes.headerHeight+20))
     infoFrame.Position = UDim2.new(0,theme.sizes.contentPadX,0,theme.sizes.headerHeight+10)
     infoFrame.BackgroundColor3 = theme.colors.cardBg; infoFrame.BorderSizePixel = 0
-    infoFrame.Visible = false; infoFrame.BackgroundTransparency = 1; infoFrame.Parent = mainWindow
+    infoFrame.Visible = false; infoFrame.BackgroundTransparency = 1; infoFrame.Parent = bodyLayer
     corner(infoFrame, theme.sizes.cardRadius)
     local infoStroke = stroke(infoFrame, theme.colors.cardBorder, 1.5, 1)
     self._infoFrame = infoFrame; self._infoStroke = infoStroke
@@ -1156,12 +1167,9 @@ function Window.new(library, cfg)
         tween(infoStroke, {Transparency=1}, 0.22)
         task.delay(0.24, function()
             infoFrame.Visible = false
-            if self.isMinimized then
-                navBar.Visible = false; contentContainer.Visible = false
-            else
-                navBar.Visible = true; contentContainer.Visible = true
-                if self._activeTab then self._activeTab.scroll.Visible = true end
-            end
+            navBar.Visible = true
+            contentContainer.Visible = true
+            if self._activeTab then self._activeTab.scroll.Visible = true end
             tween(infoIcon, {ImageColor3=theme.colors.navIcon}, theme.anim.fast)
         end)
     end
@@ -1205,8 +1213,8 @@ function Window.new(library, cfg)
     local function getViewport()
         local cam = workspace.CurrentCamera
         local vp = cam and cam.ViewportSize
-        if not vp or vp.X <= 0 or vp.Y <= 0 then return Vector2.new(1920, 1080), nil end
-        return vp, cam
+        if not vp or vp.X <= 0 or vp.Y <= 0 then return Vector2.new(1920, 1080) end
+        return vp
     end
     self._getViewport = getViewport
 
@@ -1269,7 +1277,7 @@ function Window.new(library, cfg)
             local curH = self.isMinimized and (theme.sizes.headerHeight + 2) or theme.sizes.windowHeight
             local cx, cy = clampToViewport(baseX + delta.X, baseY + delta.Y, curH)
             scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
-            if self.isMinimized then self._minimizedPos = scaleWrapper.Position end
+            self._savedPos = scaleWrapper.Position
         end
     end))
 
@@ -1292,7 +1300,7 @@ function Window.new(library, cfg)
         local h = self.isMinimized and (theme.sizes.headerHeight + 2) or theme.sizes.windowHeight
         local cx, cy = clampToViewport(px, py, h)
         scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
-        if self.isMinimized then self._minimizedPos = scaleWrapper.Position end
+        self._savedPos = scaleWrapper.Position
     end
     self._updateScale = updateScale
     if workspace.CurrentCamera then
@@ -1386,29 +1394,28 @@ end
 function Window:Notify(title, message, duration) return self.library:Notify(title, message, duration) end
 
 function Window:Minimize()
-    if self.isMinimized then return end
+    if not self.isOpen or self.isMinimized then return end
     self.isMinimized = true
     local theme = self.library.Theme
     local wrapper = self._scaleWrapper
     local vp = self._getViewport()
     local minH = theme.sizes.headerHeight + 2
-    local targetPos
-    if self._minimizedPos then
-        targetPos = self._minimizedPos
-    else
+
+    local targetPos = self._savedPos
+    if not targetPos then
         local px = wrapper.Position.X.Scale * vp.X + wrapper.Position.X.Offset
         local py = wrapper.Position.Y.Scale * vp.Y + wrapper.Position.Y.Offset
         targetPos = UDim2.new(0, px, 0, py)
     end
     local cx, cy = self._clampToViewport(targetPos.X.Offset, targetPos.Y.Offset, minH)
-    self._minimizedPos = UDim2.new(0, cx, 0, cy)
-    self._navBar.Visible = false
-    self._contentContainer.Visible = false
-    for _, t in ipairs(self._tabs) do t.scroll.Visible = false end
-    if self._infoOpen then self._infoFrame.Visible = false end
+    self._savedPos = UDim2.new(0, cx, 0, cy)
+
+    -- hide body (nav + content + info) — only header stays visible
+    self._bodyLayer.Visible = false
+
     tween(wrapper, {
         Size = UDim2.new(0, theme.sizes.windowWidth, 0, minH),
-        Position = self._minimizedPos,
+        Position = self._savedPos,
     }, theme.anim.slow)
 end
 
@@ -1417,12 +1424,12 @@ function Window:Restore()
     self.isMinimized = false
     local theme = self.library.Theme
     local wrapper = self._scaleWrapper
-    local targetPos = self._minimizedPos or self._centerPos(theme.sizes.windowHeight)
+    local targetPos = self._savedPos or self._centerPos(theme.sizes.windowHeight)
     local cx, cy = self._clampToViewport(targetPos.X.Offset, targetPos.Y.Offset, theme.sizes.windowHeight)
-    tween(wrapper, {
-        Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight),
-        Position = UDim2.new(0, cx, 0, cy),
-    }, theme.anim.slow)
+    self._savedPos = UDim2.new(0, cx, 0, cy)
+
+    -- show body again
+    self._bodyLayer.Visible = true
     if self._infoOpen then
         self._infoFrame.Visible = true
         self._navBar.Visible = false
@@ -1433,15 +1440,18 @@ function Window:Restore()
         self._contentContainer.Visible = true
         if self._activeTab then self._activeTab.scroll.Visible = true end
     end
+
+    tween(wrapper, {
+        Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight),
+        Position = self._savedPos,
+    }, theme.anim.slow)
 end
 
 function Window:Close()
     if not self.isOpen then return end
     self.isOpen = false
     local theme = self.library.Theme
-    self._navBar.Visible = false
-    self._contentContainer.Visible = false
-    for _, t in ipairs(self._tabs) do t.scroll.Visible = false end
+    self._bodyLayer.Visible = false
     if self._infoOpen then self._infoFrame.Visible = false end
     tween(self._scaleWrapper, {Size=UDim2.new(0, theme.sizes.windowWidth, 0, 0)}, theme.anim.normal)
 end
@@ -1451,27 +1461,37 @@ function Window:Open(playEntrance)
     self.isOpen = true
     local theme = self.library.Theme
     local wrapper = self._scaleWrapper
-    local targetPos
-    if self._everOpened and self._minimizedPos then
-        targetPos = self._minimizedPos
-        local cx, cy = self._clampToViewport(targetPos.X.Offset, targetPos.Y.Offset, theme.sizes.windowHeight)
-        wrapper.Position = UDim2.new(0, cx, 0, cy)
-    else
+
+    -- position: center on first open, else restore saved position
+    if not self._everOpened or not self._savedPos then
         wrapper.Position = self._centerPos(theme.sizes.windowHeight)
+        self._savedPos = wrapper.Position
+    else
+        local cx, cy = self._clampToViewport(self._savedPos.X.Offset, self._savedPos.Y.Offset, theme.sizes.windowHeight)
+        wrapper.Position = UDim2.new(0, cx, 0, cy)
+        self._savedPos = wrapper.Position
     end
     self._everOpened = true
+
     if playEntrance ~= false then
         wrapper.Size = UDim2.new(0, theme.sizes.windowWidth, 0, 0)
         self._mainWindow.BackgroundTransparency = 1
         self._header.BackgroundTransparency = 1
         self._headerFlat.BackgroundTransparency = 1
-        self._navBar.Visible = false
-        self._contentContainer.Visible = false
-        popTween(wrapper, {Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight)}, 0.55)
-        tween(self._mainWindow, {BackgroundTransparency=0}, 0.45)
-        tween(self._header, {BackgroundTransparency=0}, 0.45)
-        tween(self._headerFlat, {BackgroundTransparency=0}, 0.45)
-        task.delay(0.35, function()
+        self._bodyLayer.Visible = false
+
+        local finalSize = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight)
+        local tw = TweenService:Create(wrapper, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = finalSize})
+        tw:Play()
+        tw.Completed:Connect(function() wrapper.Size = finalSize end)
+
+        tween(self._mainWindow, {BackgroundTransparency=0}, 0.40)
+        tween(self._header, {BackgroundTransparency=0}, 0.40)
+        tween(self._headerFlat, {BackgroundTransparency=0}, 0.40)
+
+        task.delay(0.32, function()
+            if self._destroyed then return end
+            self._bodyLayer.Visible = true
             self._navBar.Visible = true
             self._contentContainer.Visible = true
             if self._activeTab then self._activeTab.scroll.Visible = true end
@@ -1494,6 +1514,7 @@ function Window:Open(playEntrance)
         self._mainWindow.BackgroundTransparency = 0
         self._header.BackgroundTransparency = 0
         self._headerFlat.BackgroundTransparency = 0
+        self._bodyLayer.Visible = true
         self._navBar.Visible = true
         self._contentContainer.Visible = true
         if self._activeTab then self._activeTab.scroll.Visible = true end
