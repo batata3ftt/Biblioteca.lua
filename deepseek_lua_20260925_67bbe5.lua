@@ -1,12 +1,12 @@
 -- ============================================================
--- Babis UI Library v1.2.0
+-- Babis UI Library v1.3.0
 -- Reusable, hub-agnostic Roblox UI framework.
 -- Load:  local Library = loadstring(game:HttpGet("URL"))()
 -- ============================================================
 
 local Library = {}
 Library.__index = Library
-Library.Version = "1.2.0"
+Library.Version = "1.3.0"
 
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
@@ -17,7 +17,7 @@ local LocalPlayer       = Players.LocalPlayer
 local PlayerGui         = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ============================================================
--- BRAND (editável de fora via Library.Brand / Library:SetBrand)
+-- BRAND
 -- ============================================================
 Library.Brand = {
     Title        = "UI Library",
@@ -48,27 +48,21 @@ Library.Theme = {
         accent        = Color3.fromRGB(90, 165, 255),
         accentSoft    = Color3.fromRGB(160, 210, 255),
         accentDark    = Color3.fromRGB(40, 90, 160),
-
         navBg         = Color3.fromRGB(18, 18, 19),
         navBorder     = Color3.fromRGB(90, 88, 92),
         navIcon       = Color3.fromRGB(52, 61, 69),
         navIconActive = Color3.fromRGB(160, 210, 255),
         navActiveBrd  = Color3.fromRGB(160, 210, 255),
-
         cardBg        = Color3.fromRGB(16, 16, 20),
         cardBorder    = Color3.fromRGB(56, 55, 62),
-
         toggleOff     = Color3.fromRGB(38, 38, 44),
         toggleOn      = Color3.fromRGB(90, 165, 255),
-
         textPrimary   = Color3.fromRGB(240, 240, 248),
         textDesc      = Color3.fromRGB(150, 148, 168),
         textMuted     = Color3.fromRGB(130, 130, 150),
-
         closeHover    = Color3.fromRGB(220, 70, 90),
         handIdle      = Color3.fromRGB(240, 245, 255),
         handHover     = Color3.fromRGB(255, 255, 255),
-
         bellBg        = Color3.fromRGB(30, 38, 48),
         sectionTitle  = Color3.fromRGB(160, 210, 255),
         cfgIcon       = Color3.fromRGB(170, 120, 255),
@@ -261,12 +255,10 @@ function Library:SetAutoload(name)
 end
 
 -- ============================================================
--- BRAND
+-- BRAND API
 -- ============================================================
 function Library:SetBrand(t)
-    for k, v in pairs(t or {}) do
-        self.Brand[k] = v
-    end
+    for k, v in pairs(t or {}) do self.Brand[k] = v end
     for _, w in ipairs(self._windows or {}) do
         if w.ApplyBrand then w:ApplyBrand() end
     end
@@ -284,8 +276,7 @@ end
 -- ============================================================
 function Library:PlayIntro(cfg, onComplete)
     if type(cfg) == "function" and onComplete == nil then
-        onComplete = cfg
-        cfg = {}
+        onComplete = cfg; cfg = {}
     end
     cfg = cfg or {}
     local duration = cfg.Duration or self.Config.introDuration
@@ -385,8 +376,7 @@ function Library:PlayIntro(cfg, onComplete)
             local spin = TweenService:Create(image,
                 TweenInfo.new(1.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
                 { Rotation = image.Rotation + 360 })
-            spin:Play()
-            spin.Completed:Wait()
+            spin:Play(); spin.Completed:Wait()
             if not spinning then break end
             task.wait(0.45)
         end
@@ -436,9 +426,7 @@ Notifier.__index = Notifier
 
 function Notifier.new(theme, assets, config)
     local self = setmetatable({}, Notifier)
-    self.theme = theme
-    self.assets = assets
-    self.config = config
+    self.theme = theme; self.assets = assets; self.config = config
     self.order = 0
 
     local old = PlayerGui:FindFirstChild("BabisUILibNotif")
@@ -474,8 +462,7 @@ function Notifier.new(theme, assets, config)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     layout.Parent = container
 
-    self.gui = gui
-    self.container = container
+    self.gui = gui; self.container = container
     return self
 end
 
@@ -703,10 +690,7 @@ function Button.new(section, cfg)
         tween(hand, { ImageColor3 = theme.colors.handIdle }, theme.anim.fast)
     end)
 
-    local self = setmetatable({
-        _card = card, _title = title, _desc = desc,
-        _hand = hand, _playing = false,
-    }, Button)
+    local self = setmetatable({ _card = card, _playing = false }, Button)
     window:_registerComponent(self, cfg.Key or titleText)
 
     local function fire()
@@ -751,7 +735,6 @@ function Button.new(section, cfg)
 
         if onClick then onClick() end
         if doNotify then library:Notify(titleText, "Executed") end
-
         task.delay(0.4, function() self._playing = false end)
     end
 
@@ -762,6 +745,7 @@ function Button.new(section, cfg)
     function self:SetText(t) title.Text = t end
     function self:SetDescription(t) desc.Text = t end
     function self:Get() return nil end
+    function self:Set() end
     function self:Destroy() card:Destroy() end
 
     return self
@@ -1398,6 +1382,7 @@ function Paragraph.new(section, cfg)
     function self:SetText(t) desc.Text = t end
     function self:SetTitle(t) title.Text = t end
     function self:Get() return nil end
+    function self:Set() end
     function self:Destroy() card:Destroy() end
     return self
 end
@@ -1455,11 +1440,7 @@ Tab.__index = Tab
 function Tab.new(window, cfg)
     local theme = window.library.Theme
     local self = setmetatable({
-        window = window,
-        _order = 0,
-        _sections = {},
-        cfg = cfg or {},
-        _entry = nil,
+        window = window, _order = 0, _sections = {}, cfg = cfg or {}, _entry = nil,
     }, Tab)
 
     local iconId   = resolveIcon(cfg.Icon or cfg.IconId)
@@ -1561,9 +1542,7 @@ function Tab:CreateSection(cfg)
 end
 
 function Tab:Destroy()
-    if self._entry.button and self._entry.button.Parent then
-        self._entry.button:Destroy()
-    end
+    if self._entry.button and self._entry.button.Parent then self._entry.button:Destroy() end
     if self.scroll and self.scroll.Parent then self.scroll:Destroy() end
 end
 
@@ -1577,30 +1556,18 @@ function Window.new(library, cfg)
     cfg = cfg or {}
     local theme = library.Theme
     local self = setmetatable({
-        library = library,
-        _tabs = {},
-        _activeTab = nil,
-        _tabOrder = 0,
-        _connections = {},
-        _components = {},
-        _destroyed = false,
-        isOpen = false,
-        isMinimized = false,
-        _infoOpen = false,
-        _dragging = false,
-        _justRestored = false,
-        _minimizedPos = nil,
-        cfg = cfg,
+        library = library, _tabs = {}, _activeTab = nil, _tabOrder = 0,
+        _connections = {}, _components = {}, _destroyed = false,
+        isOpen = false, isMinimized = false, _infoOpen = false, _dragging = false,
+        _justRestored = false, _minimizedPos = nil, cfg = cfg,
     }, Window)
 
     self.title    = cfg.Title or library.Brand.Title
     self.subtitle = cfg.SubTitle or cfg.Subtitle or library.Brand.SubTitle
     self.version  = cfg.Version or library.Brand.Version
     self.about    = cfg.About or {
-        Title   = library.Brand.AboutTitle,
-        Body    = library.Brand.AboutBody,
-        Discord = library.Brand.Discord,
-        Enabled = library.Brand.AboutEnabled,
+        Title = library.Brand.AboutTitle, Body = library.Brand.AboutBody,
+        Discord = library.Brand.Discord, Enabled = library.Brand.AboutEnabled,
     }
 
     local screenGui = Instance.new("ScreenGui")
@@ -1996,7 +1963,6 @@ function Window.new(library, cfg)
         if not self._infoOpen then tween(infoIcon, { ImageColor3 = theme.colors.navIcon }, theme.anim.fast) end
     end)
 
-    -- clamp helper
     local function clampToViewport(px, py, overrideH)
         local cam = workspace.CurrentCamera
         if not cam then return px, py end
@@ -2019,9 +1985,7 @@ function Window.new(library, cfg)
 
     closeBtn.Activated:Connect(function()
         self:Close()
-        task.delay(theme.anim.normal + 0.05, function()
-            screenGui:Destroy()
-        end)
+        task.delay(theme.anim.normal + 0.05, function() screenGui:Destroy() end)
     end)
 
     minBtn.MouseEnter:Connect(function() tween(minGlyph, { BackgroundColor3 = theme.colors.accent }, theme.anim.fast) end)
@@ -2035,7 +1999,6 @@ function Window.new(library, cfg)
         tween(xBar2, { BackgroundColor3 = theme.colors.textPrimary }, theme.anim.fast)
     end)
 
-    -- DRAG
     header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             self._dragging = true
@@ -2053,16 +2016,10 @@ function Window.new(library, cfg)
             local delta = input.Position - self._dragStart
             local baseX = self._startPos.X.Scale * vp.X + self._startPos.X.Offset
             local baseY = self._startPos.Y.Scale * vp.Y + self._startPos.Y.Offset
-            local s = uiScale.Scale or 1
             local curH = self.isMinimized and (theme.sizes.headerHeight + 2) or theme.sizes.windowHeight
-            local newX = baseX + delta.X
-            local newY = baseY + delta.Y
-            local cx, cy = clampToViewport(newX, newY, curH)
+            local cx, cy = clampToViewport(baseX + delta.X, baseY + delta.Y, curH)
             scaleWrapper.Position = UDim2.new(0, cx, 0, cy)
-            if self.isMinimized then
-                self._minimizedPos = scaleWrapper.Position
-            end
-            self._justRestored = false
+            if self.isMinimized then self._minimizedPos = scaleWrapper.Position end
         end
     end))
 
@@ -2125,9 +2082,7 @@ end
 function Window:ApplyValues(data)
     for _, comp in ipairs(self._components) do
         if comp._configKey and data[comp._configKey] ~= nil and comp.Set then
-            local ok, err = pcall(function()
-                comp:Set(data[comp._configKey], false)
-            end)
+            pcall(function() comp:Set(data[comp._configKey], false) end)
         end
     end
 end
@@ -2139,7 +2094,7 @@ function Window:ApplyBrand()
     if self._versionLabel then self._versionLabel.Text = self.cfg.Version or b.Version end
     if self._aboutTitle then self._aboutTitle.Text = b.AboutTitle end
     if self._aboutDesc then self._aboutDesc.Text = b.AboutBody end
-    self.about.Discord = self.cfg.About and self.cfg.About.Discord or b.Discord
+    self.about.Discord = (self.cfg.About and self.cfg.About.Discord) or b.Discord
 end
 
 function Window:SetTitle(t) self._appLabel.Text = t end
@@ -2150,9 +2105,7 @@ function Window:SetDiscord(url) self.about.Discord = url end
 function Window:CreateTab(cfg)
     local tab = Tab.new(self, cfg or {})
     table.insert(self._tabs, tab)
-    if not self._activeTab then
-        self:SelectTab(tab, false)
-    end
+    if not self._activeTab then self:SelectTab(tab, false) end
     return tab
 end
 
@@ -2160,11 +2113,8 @@ function Window:SelectTab(tab, doPop)
     if not tab then return end
     local theme = self.library.Theme
 
-    for _, t in ipairs(self._tabs) do
-        t.scroll.Visible = false
-    end
+    for _, t in ipairs(self._tabs) do t.scroll.Visible = false end
     tab.scroll.Visible = true
-
     self._activeTab = tab
 
     for _, t in ipairs(self._tabs) do
@@ -2209,10 +2159,6 @@ end
 
 -- ============================================================
 -- MINIMIZE / RESTORE
--- Regra:
---   Minimize  -> salva a posição atual (ou usa a última salva se acabou de restaurar)
---   Restore   -> volta pro CENTRO da tela
---   Minimize de novo -> volta pra última posição salva
 -- ============================================================
 function Window:Minimize()
     if self.isMinimized then return end
@@ -2258,7 +2204,6 @@ function Window:Restore()
     local cam = workspace.CurrentCamera
     local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
 
-    -- sempre volta pro centro
     local cx = vp.X / 2
     local cy = vp.Y / 2
     cx, cy = self._clampToViewport(cx, cy, theme.sizes.windowHeight)
@@ -2317,7 +2262,6 @@ function Window:Open(playEntrance)
         popTween(wrapper, {
             Size = UDim2.new(0, theme.sizes.windowWidth, 0, theme.sizes.windowHeight),
         }, 0.55)
-
         tween(self._mainWindow, { BackgroundTransparency = 0 }, 0.45)
         tween(self._header, { BackgroundTransparency = 0 }, 0.45)
         tween(self._headerFlat, { BackgroundTransparency = 0 }, 0.45)
@@ -2326,7 +2270,6 @@ function Window:Open(playEntrance)
             self._navBar.Visible = true
             self._contentContainer.Visible = true
             if self._activeTab then self._activeTab.scroll.Visible = true end
-
             local scroll = self._activeTab and self._activeTab.scroll
             if scroll then
                 for _, c in ipairs(scroll:GetChildren()) do
@@ -2353,168 +2296,423 @@ function Window:Open(playEntrance)
 end
 
 -- ============================================================
--- SETTINGS PANEL (keybind + config save/load)
+-- SETTINGS PANEL (idêntico ao original: keybind + config card)
 -- ============================================================
 function Window:BuildSettingsPanel(section, opts)
     opts = opts or {}
     local library = self.library
+    local theme = library.Theme
+    local scroll = section.tab.scroll
 
-    -- Keybind
-    section:CreateKeybind({
-        Name        = opts.KeybindName or "Toggle UI Key",
-        Description = opts.KeybindDesc or "Key to open/close the interface",
-        Default     = opts.DefaultKeybind or "K",
-        Mode        = "Toggle",
-        Notify      = false,
-        Callback    = function(key)
+    -- ── KEYBIND CARD ──
+    local keybindCard = Instance.new("Frame")
+    keybindCard.Size = UDim2.new(1, 0, 0, 110)
+    keybindCard.BackgroundColor3 = theme.colors.cardBg
+    keybindCard.BorderSizePixel = 0
+    keybindCard.LayoutOrder = section:_nextOrder()
+    keybindCard.Parent = scroll
+    corner(keybindCard, theme.sizes.cardRadius)
+    stroke(keybindCard, theme.colors.cardBorder, 1.5, 0)
+
+    local kbTitle = Instance.new("TextLabel")
+    kbTitle.BackgroundTransparency = 1
+    kbTitle.Text = "Toggle Keybind"
+    kbTitle.TextColor3 = theme.colors.textPrimary
+    kbTitle.Font = Enum.Font.GothamBold
+    kbTitle.TextSize = 24
+    kbTitle.TextXAlignment = Enum.TextXAlignment.Left
+    kbTitle.TextYAlignment = Enum.TextYAlignment.Top
+    kbTitle.Size = UDim2.new(1, -160, 0, 28)
+    kbTitle.Position = UDim2.new(0, 16, 0, 24)
+    kbTitle.Parent = keybindCard
+
+    local kbDesc = Instance.new("TextLabel")
+    kbDesc.BackgroundTransparency = 1
+    kbDesc.Text = "Key to open/close the interface"
+    kbDesc.TextColor3 = theme.colors.textDesc
+    kbDesc.Font = Enum.Font.Gotham
+    kbDesc.TextSize = 15
+    kbDesc.TextXAlignment = Enum.TextXAlignment.Left
+    kbDesc.TextYAlignment = Enum.TextYAlignment.Top
+    kbDesc.Size = UDim2.new(1, -160, 0, 22)
+    kbDesc.Position = UDim2.new(0, 16, 0, 60)
+    kbDesc.Parent = keybindCard
+
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.new(0, 130, 0, 46)
+    keyBtn.Position = UDim2.new(1, -146, 0.5, -23)
+    keyBtn.BackgroundColor3 = theme.colors.navBg
+    keyBtn.Text = opts.DefaultKeybind or "K"
+    keyBtn.TextColor3 = theme.colors.textPrimary
+    keyBtn.Font = Enum.Font.GothamBold
+    keyBtn.TextSize = 18
+    keyBtn.AutoButtonColor = false
+    keyBtn.Parent = keybindCard
+    corner(keyBtn, 10)
+    local keyStroke = stroke(keyBtn, theme.colors.cardBorder, 1.5, 0)
+
+    local listening = false
+    local listenConn = nil
+    local savedKey = opts.DefaultKeybind or "K"
+
+    local function stopListening()
+        listening = false
+        if listenConn then pcall(function() listenConn:Disconnect() end) end
+        listenConn = nil
+        keyBtn.Text = savedKey
+        tween(keyBtn, { BackgroundColor3 = theme.colors.navBg }, theme.anim.fast)
+        tween(keyStroke, { Color = theme.colors.cardBorder }, theme.anim.fast)
+    end
+
+    keyBtn.MouseEnter:Connect(function()
+        if not listening then
+            tween(keyBtn, { BackgroundColor3 = theme.colors.navBg }, theme.anim.fast)
+            tween(keyStroke, { Color = theme.colors.accent }, theme.anim.fast)
+        end
+    end)
+    keyBtn.MouseLeave:Connect(function()
+        if not listening then
+            tween(keyStroke, { Color = theme.colors.cardBorder }, theme.anim.fast)
+        end
+    end)
+
+    keyBtn.Activated:Connect(function()
+        if listening then return end
+        listening = true
+        keyBtn.Text = "Press a key..."
+        tween(keyStroke, { Color = theme.colors.accent }, theme.anim.fast)
+
+        listenConn = UserInputService.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+            local key = input.KeyCode
+            if key == Enum.KeyCode.Unknown then return end
+
+            savedKey = key.Name
+            stopListening()
+            library:Notify("Keybind", "Set to " .. key.Name)
+        end)
+    end)
+
+    -- global key listener for toggle
+    self:_track(UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if listening then return end
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        if not savedKey or savedKey == "None" or savedKey == "" then return end
+        if input.KeyCode == Enum.KeyCode[savedKey] then
             if self.isOpen then self:Close() else self:Open() end
-        end,
-    })
+        end
+    end))
 
-    -- Config name input
-    local nameInput = section:CreateInput({
-        Name        = "Config name",
-        Description = "Type a name and press Enter",
-        Default     = "",
-        Placeholder = "type a name...",
-        Notify      = false,
-        Callback    = function() end,
-    })
+    -- ── CONFIG CARD ──
+    local cfgCard = Instance.new("Frame")
+    cfgCard.Size = UDim2.new(1, 0, 0, theme.sizes.cfgHeight)
+    cfgCard.BackgroundColor3 = theme.colors.cardBg
+    cfgCard.BorderSizePixel = 0
+    cfgCard.LayoutOrder = section:_nextOrder()
+    cfgCard.Parent = scroll
+    corner(cfgCard, theme.sizes.cardRadius)
+    stroke(cfgCard, theme.colors.cardBorder, 1.5, 0)
 
-    -- List dropdown
-    local listDd = section:CreateDropdown({
-        Name        = "Config list",
-        Description = "Pick a config",
-        Options     = { "---" },
-        Default     = "---",
-        Notify      = false,
-        Callback    = function(v) end,
-    })
+    local cfgIcon = Instance.new("ImageLabel")
+    cfgIcon.Size = UDim2.new(0, 26, 0, 26)
+    cfgIcon.Position = UDim2.new(0, 14, 0, 14)
+    cfgIcon.BackgroundTransparency = 1
+    cfgIcon.Image = library.Assets.cfgIcon
+    cfgIcon.ImageColor3 = theme.colors.cfgIcon
+    cfgIcon.ScaleType = Enum.ScaleType.Fit
+    cfgIcon.Parent = cfgCard
+
+    local cfgHeader = Instance.new("TextLabel")
+    cfgHeader.Size = UDim2.new(1, -60, 0, 26)
+    cfgHeader.Position = UDim2.new(0, 48, 0, 16)
+    cfgHeader.BackgroundTransparency = 1
+    cfgHeader.Text = "Configuration"
+    cfgHeader.TextColor3 = theme.colors.textPrimary
+    cfgHeader.Font = Enum.Font.GothamBold
+    cfgHeader.TextSize = theme.textSizes.cfgTitle
+    cfgHeader.TextXAlignment = Enum.TextXAlignment.Left
+    cfgHeader.Parent = cfgCard
+
+    local function smallLabel(y, text)
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -28, 0, 22)
+        lbl.Position = UDim2.new(0, 14, 0, y)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = text
+        lbl.TextColor3 = theme.colors.textPrimary
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = theme.textSizes.cfgLabel
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Parent = cfgCard
+        return lbl
+    end
+
+    smallLabel(54, "Config name")
+
+    local nameBox = Instance.new("TextBox")
+    nameBox.Size = UDim2.new(1, -28, 0, 38)
+    nameBox.Position = UDim2.new(0, 14, 0, 78)
+    nameBox.BackgroundColor3 = theme.colors.cfgBtnBg
+    nameBox.Text = ""
+    nameBox.PlaceholderText = "type a name..."
+    nameBox.PlaceholderColor3 = theme.colors.textMuted
+    nameBox.TextColor3 = theme.colors.textPrimary
+    nameBox.Font = Enum.Font.GothamBold
+    nameBox.TextSize = theme.textSizes.cfgInput
+    nameBox.TextXAlignment = Enum.TextXAlignment.Left
+    nameBox.ClearTextOnFocus = false
+    nameBox.Parent = cfgCard
+    corner(nameBox, 8)
+    local nameStroke = stroke(nameBox, theme.colors.cfgBtnBorder, 1.2, 0)
+    local namePad = Instance.new("UIPadding")
+    namePad.PaddingLeft = UDim.new(0, 12)
+    namePad.Parent = nameBox
+
+    nameBox.Focused:Connect(function() tween(nameStroke, { Color = theme.colors.accent }, theme.anim.fast) end)
+    nameBox.FocusLost:Connect(function() tween(nameStroke, { Color = theme.colors.cfgBtnBorder }, theme.anim.fast) end)
+
+    -- small button helper
+    local function smallButton(y, text, onClick)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -28, 0, 34)
+        btn.Position = UDim2.new(0, 14, 0, y)
+        btn.BackgroundColor3 = theme.colors.cfgBtnBg
+        btn.Text = text
+        btn.TextColor3 = theme.colors.textPrimary
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = theme.textSizes.cfgBtn
+        btn.AutoButtonColor = false
+        btn.Parent = cfgCard
+        corner(btn, 8)
+        local s = stroke(btn, theme.colors.cfgBtnBorder, 1.2, 0)
+
+        btn.MouseEnter:Connect(function()
+            tween(btn, { BackgroundColor3 = theme.colors.navBg }, theme.anim.fast)
+            tween(s, { Color = theme.colors.accent }, theme.anim.fast)
+        end)
+        btn.MouseLeave:Connect(function()
+            tween(btn, { BackgroundColor3 = theme.colors.cfgBtnBg }, theme.anim.fast)
+            tween(s, { Color = theme.colors.cfgBtnBorder }, theme.anim.fast)
+        end)
+        btn.Activated:Connect(function()
+            local osz, opos = btn.Size, btn.Position
+            btn.Size = UDim2.new(1, -32, 0, 32)
+            btn.Position = UDim2.new(0, 16, 0, y + 1)
+            task.delay(0.07, function()
+                btn.Size = osz; btn.Position = opos
+            end)
+            if onClick then onClick() end
+        end)
+        return btn
+    end
+
+    smallButton(126, "Create config", function()
+        local name = nameBox.Text
+        if name == "" then library:Notify("Config", "Enter a name first") return end
+        local ok, err = library:SaveConfig(name, self:CollectValues())
+        if ok then
+            library:Notify("Config", "\"" .. name .. "\" created")
+            nameBox.Text = ""
+            if refreshCfgList then refreshCfgList() end
+        else
+            library:Notify("Config", "Failed: " .. tostring(err))
+        end
+    end)
+
+    smallLabel(176, "Config list")
+
+    local ddBtn = Instance.new("TextButton")
+    ddBtn.Size = UDim2.new(1, -28, 0, 38)
+    ddBtn.Position = UDim2.new(0, 14, 0, 200)
+    ddBtn.BackgroundColor3 = theme.colors.cfgBtnBg
+    ddBtn.Text = "---"
+    ddBtn.TextColor3 = theme.colors.textPrimary
+    ddBtn.Font = Enum.Font.GothamBold
+    ddBtn.TextSize = theme.textSizes.cfgInput
+    ddBtn.TextXAlignment = Enum.TextXAlignment.Left
+    ddBtn.AutoButtonColor = false
+    ddBtn.Parent = cfgCard
+    corner(ddBtn, 8)
+    local ddStroke = stroke(ddBtn, theme.colors.cfgBtnBorder, 1.2, 0)
+    local ddPad = Instance.new("UIPadding")
+    ddPad.PaddingLeft = UDim.new(0, 12)
+    ddPad.Parent = ddBtn
+
+    local arrow = Instance.new("TextLabel")
+    arrow.Size = UDim2.new(0, 24, 0, 38)
+    arrow.Position = UDim2.new(1, -30, 0, 0)
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "^"
+    arrow.TextColor3 = theme.colors.textDesc
+    arrow.Font = Enum.Font.GothamBold
+    arrow.TextSize = 16
+    arrow.Parent = ddBtn
 
     local selectedName = nil
+    local ddListOpen, ddBackdrop, ddList = false, nil, nil
 
-    local function refreshList()
-        local list = library:ListConfigs()
-        if #list == 0 then list = { "---" } end
-        listDd:SetOptions(list)
-        listDd:Set(list[1], false)
-        selectedName = nil
+    local function closeDd()
+        if not ddListOpen then return end
+        ddListOpen = false
+        if ddBackdrop and ddBackdrop.Parent then ddBackdrop:Destroy() end
+        if ddList and ddList.Parent then ddList:Destroy() end
+        ddBackdrop, ddList = nil, nil
+        tween(ddStroke, { Color = theme.colors.cfgBtnBorder }, theme.anim.fast)
     end
-    refreshList()
 
-    section:CreateButton({
-        Name        = "Create config",
-        Description = "Save current values to a new file",
-        Notify      = false,
-        Callback    = function()
-            local name = nameInput:Get()
-            if name == "" then
-                library:Notify("Config", "Enter a name first")
-                return
-            end
-            local ok, err = library:SaveConfig(name, self:CollectValues())
-            if ok then
-                library:Notify("Config", "\"" .. name .. "\" created")
-                nameInput:Set("")
-                refreshList()
-            else
-                library:Notify("Config", "Failed: " .. tostring(err))
-            end
-        end,
-    })
+    local function openDd()
+        if ddListOpen then closeDd() return end
+        ddListOpen = true
 
-    section:CreateButton({
-        Name        = "Save (overwrite selected)",
-        Description = "Overwrite currently selected config",
-        Notify      = false,
-        Callback    = function()
-            local name = listDd:Get()
-            if not name or name == "---" then
-                library:Notify("Config", "Select a config first")
-                return
-            end
-            local ok = library:SaveConfig(name, self:CollectValues())
-            if ok then
-                library:Notify("Config", "\"" .. name .. "\" saved")
-            else
-                library:Notify("Config", "Failed")
-            end
-        end,
-    })
+        ddBackdrop = Instance.new("TextButton")
+        ddBackdrop.Size = UDim2.new(1, 0, 1, 0)
+        ddBackdrop.BackgroundTransparency = 1
+        ddBackdrop.Text = ""
+        ddBackdrop.AutoButtonColor = false
+        ddBackdrop.ZIndex = 60
+        ddBackdrop.Parent = self._scaleWrapper
+        ddBackdrop.Activated:Connect(closeDd)
 
-    section:CreateButton({
-        Name        = "Load selected",
-        Description = "Apply selected config values",
-        Notify      = false,
-        Callback    = function()
-            local name = listDd:Get()
-            if not name or name == "---" then
-                library:Notify("Config", "Select a config first")
-                return
-            end
-            local data = library:LoadConfig(name)
-            if not data then
-                library:Notify("Config", "Failed to load")
-                return
-            end
-            self:ApplyValues(data)
-            library:Notify("Config", "\"" .. name .. "\" loaded")
-        end,
-    })
+        local list = library:ListConfigs()
+        if #list == 0 then
+            tween(ddStroke, { Color = theme.colors.accent }, theme.anim.fast)
+            library:Notify("Config", "No configs found")
+            closeDd()
+            return
+        end
 
-    section:CreateButton({
-        Name        = "Delete selected",
-        Description = "Remove selected config file",
-        Notify      = false,
-        Callback    = function()
-            local name = listDd:Get()
-            if not name or name == "---" then
-                library:Notify("Config", "Select a config first")
-                return
-            end
-            library:DeleteConfig(name)
-            library:Notify("Config", "\"" .. name .. "\" deleted")
-            refreshList()
-        end,
-    })
+        local btnAbs = ddBtn.AbsolutePosition
+        local wrapAbs = self._scaleWrapper.AbsolutePosition
+        local s = self._uiScale.Scale
+        local relX = (btnAbs.X - wrapAbs.X) / s
+        local relW = ddBtn.AbsoluteSize.X / s
+        local btnTopY = (btnAbs.Y - wrapAbs.Y) / s
 
-    section:CreateButton({
-        Name        = "Refresh list",
-        Description = "Reload config list from disk",
-        Notify      = false,
-        Callback    = function()
-            refreshList()
-            library:Notify("Config", "List refreshed")
-        end,
-    })
+        local itemH = 34
+        local listH = #list * itemH + 8
+        local relY = btnTopY - listH - 6
 
-    section:CreateButton({
-        Name        = "Set as autoload",
-        Description = "Load this config on next script run",
-        Notify      = false,
-        Callback    = function()
-            local name = listDd:Get()
-            if not name or name == "---" then
-                library:Notify("Config", "Select a config first")
-                return
-            end
-            library:SetAutoload(name)
-            library:Notify("Config", "\"" .. name .. "\" set as autoload")
-        end,
-    })
+        ddList = Instance.new("Frame")
+        ddList.Size = UDim2.new(0, relW, 0, listH)
+        ddList.Position = UDim2.new(0, relX, 0, relY)
+        ddList.BackgroundColor3 = theme.colors.cardBg
+        ddList.BorderSizePixel = 0
+        ddList.ZIndex = 61
+        ddList.Parent = self._scaleWrapper
+        corner(ddList, 10)
+        stroke(ddList, theme.colors.accent, 1.5, 0)
 
-    section:CreateButton({
-        Name        = "Reset autoload",
-        Description = "Clear autoload setting",
-        Notify      = false,
-        Callback    = function()
-            library:SetAutoload(nil)
-            library:Notify("Config", "Autoload cleared")
-        end,
-    })
+        local pad = Instance.new("UIPadding")
+        pad.PaddingTop = UDim.new(0, 4)
+        pad.PaddingBottom = UDim.new(0, 4)
+        pad.Parent = ddList
+
+        local lay = Instance.new("UIListLayout")
+        lay.FillDirection = Enum.FillDirection.Vertical
+        lay.Parent = ddList
+
+        for i, name in ipairs(list) do
+            local item = Instance.new("TextButton")
+            item.Size = UDim2.new(1, -8, 0, itemH)
+            item.Position = UDim2.new(0, 4, 0, 0)
+            item.BackgroundColor3 = theme.colors.cardBg
+            item.BackgroundTransparency = 1
+            item.Text = name
+            item.TextColor3 = (name == selectedName) and theme.colors.accent or theme.colors.textPrimary
+            item.Font = Enum.Font.GothamBold
+            item.TextSize = 16
+            item.TextXAlignment = Enum.TextXAlignment.Left
+            item.AutoButtonColor = false
+            item.LayoutOrder = i
+            item.ZIndex = 62
+            item.Parent = ddList
+            corner(item, 6)
+
+            local ipad = Instance.new("UIPadding")
+            ipad.PaddingLeft = UDim.new(0, 10)
+            ipad.Parent = item
+
+            item.MouseEnter:Connect(function() tween(item, { BackgroundTransparency = 0, BackgroundColor3 = theme.colors.navBg }, theme.anim.fast) end)
+            item.MouseLeave:Connect(function() tween(item, { BackgroundTransparency = 1 }, theme.anim.fast) end)
+            item.Activated:Connect(function()
+                selectedName = name
+                ddBtn.Text = name
+                closeDd()
+            end)
+        end
+
+        tween(ddStroke, { Color = theme.colors.accent }, theme.anim.fast)
+    end
+
+    local function refreshCfgList()
+        ddBtn.Text = selectedName or "---"
+    end
+
+    ddBtn.Activated:Connect(openDd)
+    ddBtn.MouseEnter:Connect(function() tween(ddBtn, { BackgroundColor3 = theme.colors.navBg }, theme.anim.fast) end)
+    ddBtn.MouseLeave:Connect(function() tween(ddBtn, { BackgroundColor3 = theme.colors.cfgBtnBg }, theme.anim.fast) end)
+
+    smallButton(250, "Load config", function()
+        if not selectedName then library:Notify("Config", "Select a config first") return end
+        local data = library:LoadConfig(selectedName)
+        if not data then library:Notify("Config", "Failed to load") return end
+        self:ApplyValues(data)
+        library:Notify("Config", "\"" .. selectedName .. "\" loaded")
+    end)
+
+    smallButton(288, "Overwrite config", function()
+        if not selectedName then library:Notify("Config", "Select a config first") return end
+        local ok, err = library:SaveConfig(selectedName, self:CollectValues())
+        if ok then library:Notify("Config", "\"" .. selectedName .. "\" overwritten")
+        else library:Notify("Config", "Failed: " .. tostring(err)) end
+    end)
+
+    smallButton(326, "Delete config", function()
+        if not selectedName then library:Notify("Config", "Select a config first") return end
+        library:DeleteConfig(selectedName)
+        library:Notify("Config", "\"" .. selectedName .. "\" deleted")
+        selectedName = nil
+        ddBtn.Text = "---"
+    end)
+
+    smallButton(364, "Refresh list", function()
+        library:Notify("Config", "List refreshed")
+        if refreshCfgList then refreshCfgList() end
+    end)
+
+    smallButton(402, "Set as autoload", function()
+        if not selectedName then library:Notify("Config", "Select a config first") return end
+        library:SetAutoload(selectedName)
+        if updateAutoloadText then updateAutoloadText() end
+        library:Notify("Config", "\"" .. selectedName .. "\" set as autoload")
+    end)
+
+    smallButton(440, "Reset autoload", function()
+        library:SetAutoload(nil)
+        if updateAutoloadText then updateAutoloadText() end
+        library:Notify("Config", "Autoload cleared")
+    end)
+
+    local autoloadText = Instance.new("TextLabel")
+    autoloadText.Size = UDim2.new(1, -28, 0, 22)
+    autoloadText.Position = UDim2.new(0, 14, 0, 482)
+    autoloadText.BackgroundTransparency = 1
+    autoloadText.Text = "Current autoload config: " .. (library:GetAutoload() or "none")
+    autoloadText.TextColor3 = theme.colors.textDesc
+    autoloadText.Font = Enum.Font.GothamBold
+    autoloadText.TextSize = theme.textSizes.cfgHint
+    autoloadText.TextXAlignment = Enum.TextXAlignment.Left
+    autoloadText.Parent = cfgCard
+
+    local function updateAutoloadText()
+        autoloadText.Text = "Current autoload config: " .. (library:GetAutoload() or "none")
+    end
 
     return {
-        Refresh = refreshList,
+        Refresh = refreshCfgList,
+        UpdateAutoload = updateAutoloadText,
     }
 end
 
